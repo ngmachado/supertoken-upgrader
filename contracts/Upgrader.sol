@@ -3,7 +3,6 @@ pragma solidity ^0.8.0;
 
 import "@openzeppelin/contracts/access/AccessControlEnumerable.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {ISuperToken} from "@superfluid-finance/ethereum-contracts/contracts/interfaces/superfluid/ISuperfluid.sol";
 import {Errors} from "./libs/Errors.sol";
 
@@ -17,7 +16,6 @@ import {Errors} from "./libs/Errors.sol";
 */
 
 contract Upgrader is AccessControlEnumerable {
-    using SafeERC20 for IERC20;
 
     // role identifier for upgrader caller
     bytes32 public constant UPGRADER_ROLE = keccak256("UPGRADER_CALLER_ROLE_ID");
@@ -56,10 +54,10 @@ contract Upgrader is AccessControlEnumerable {
         IERC20 token = IERC20(superToken.getUnderlyingToken());
         uint256 beforeBalance = superToken.balanceOf(address(this));
         // get tokens from user
-        token.safeTransferFrom(from, address(this), amount);
+        token.transferFrom(from, address(this), amount);
         //reset approve amount
-        token.safeApprove(address(superToken), 0);
-        token.safeApprove(address(superToken), amount);
+        token.approve(address(superToken), 0);
+        token.approve(address(superToken), amount);
         // upgrade tokens and send back to user
         superToken.upgrade(amount);
         // depends on the decimals of underlying token. We send the diff of balances
@@ -94,7 +92,7 @@ contract Upgrader is AccessControlEnumerable {
         // downgrade tokens and send back to user
         superToken.downgrade(amount);
         // depends on the decimals of underlying token. We send the diff of balances
-        token.safeTransfer(to, token.balanceOf(address(this)) - beforeBalance);
+        token.transfer(to, token.balanceOf(address(this)) - beforeBalance);
     }
 
     /**
