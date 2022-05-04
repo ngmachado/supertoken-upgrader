@@ -20,10 +20,7 @@ contract Upgrader is AccessControlEnumerable {
             _setupRole(UPGRADER_ROLE, upgraders[i]);
         }
     }
-
-    //lock to from and to the same address
-    //check transfer bool result
-    //add comment to decimals diff underlying and supertoken
+    
     /**
      * @notice The user should ERC20.approve this contract.
      * @notice SuperToken must be whitelisted before calling this function
