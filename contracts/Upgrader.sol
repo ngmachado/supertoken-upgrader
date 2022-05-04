@@ -6,15 +6,6 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {ISuperToken} from "@superfluid-finance/ethereum-contracts/contracts/interfaces/superfluid/ISuperfluid.sol";
 import {Errors} from "./libs/Errors.sol";
 
-/*
-    Security assumptions:
-    - Upgrader is pre added to make operations.
-    - Upgrader can make upgrades/downgrades to all accounts that approve this contract
-    - Receiver can be any address, not locked to be the original account. eg. A -> Upgrade / Downgrade -> B
-    - All SuperTokens are whitelisted by admin
-    - Admin can add remove upgraders
-*/
-
 contract Upgrader is AccessControlEnumerable {
 
     // role identifier for upgrader caller
@@ -30,38 +21,42 @@ contract Upgrader is AccessControlEnumerable {
         }
     }
 
+    //lock to from and to the same address
+    //check transfer bool result
+    //add comment to decimals diff underlying and supertoken
     /**
      * @notice The user should ERC20.approve this contract.
      * @notice SuperToken must be whitelisted before calling this function
      * @notice User can upgrade self balance
      * @dev Execute upgrade function in the name of the user.
      * @param superToken Super Token to upgrade
-     * @param from User address that previous approved this contract.
-     * @param to User address that receives tokens.
+     * @param account User address that previous approved this contract.
      * @param amount Amount value to be upgraded.
      */
     function upgrade(
         ISuperToken superToken,
-        address from,
-        address to,
+        address account,
         uint256 amount
     )
     external
     {
         if(!supportedSuperTokens[superToken]) revert Errors.SuperTokenNotSupported();
         if(!hasRole(UPGRADER_ROLE, msg.sender)) revert Errors.OperationNotAllowed();
+        bool ok;
         // get underlying token
         IERC20 token = IERC20(superToken.getUnderlyingToken());
         uint256 beforeBalance = superToken.balanceOf(address(this));
         // get tokens from user
-        token.transferFrom(from, address(this), amount);
+        ok = token.transferFrom(account, address(this), amount);
+        if(!ok) revert Errors.ERC20TransferFromRevert();
         //reset approve amount
         token.approve(address(superToken), 0);
         token.approve(address(superToken), amount);
         // upgrade tokens and send back to user
         superToken.upgrade(amount);
-        // depends on the decimals of underlying token. We send the diff of balances
-        superToken.transfer(to, superToken.balanceOf(address(this)) - beforeBalance);
+        // decimals of underlying token can be different from supertoken. We send the diff of balances
+        ok = superToken.transfer(account, superToken.balanceOf(address(this)) - beforeBalance);
+        if(!ok) revert Errors.ERC20TransferRevert();
     }
 
     /**
@@ -70,29 +65,29 @@ contract Upgrader is AccessControlEnumerable {
      * @notice User can downgrade self balance
      * @dev Execute upgrade function in the name of the user.
      * @param superToken Super Token to upgrade
-     * @param from User address that previous approved this contract.
-     * @param to User address that receives tokenss.
+     * @param account User address that previous approved this contract.
      * @param amount Amount value to be downgraded (in SuperToken decimals).
      */
     function downgrade(
         ISuperToken superToken,
-        address from,
-        address to,
+        address account,
         uint256 amount
     )
     external
     {
         if(!supportedSuperTokens[superToken]) revert Errors.SuperTokenNotSupported();
         if(!hasRole(UPGRADER_ROLE, msg.sender)) revert Errors.OperationNotAllowed();
-
+        bool ok;
         // get underlying token
         IERC20 token = IERC20(superToken.getUnderlyingToken());
         uint256 beforeBalance = token.balanceOf(address(this));
-        superToken.transferFrom(from, address(this), amount);
+        ok = superToken.transferFrom(account, address(this), amount);
+        if(!ok) revert Errors.ERC20TransferFromRevert();
         // downgrade tokens and send back to user
         superToken.downgrade(amount);
-        // depends on the decimals of underlying token. We send the diff of balances
-        token.transfer(to, token.balanceOf(address(this)) - beforeBalance);
+        // decimals of underlying token can be different from supertoken. We send the diff of balances
+        ok = token.transfer(account, token.balanceOf(address(this)) - beforeBalance);
+        if(!ok) revert Errors.ERC20TransferRevert();
     }
 
     /**
@@ -107,7 +102,6 @@ contract Upgrader is AccessControlEnumerable {
     function removeSuperToken(ISuperToken superToken) external onlyRole(DEFAULT_ADMIN_ROLE) {
         delete supportedSuperTokens[superToken];
     }
-
 
     /**
      * ACCESS CONTROL

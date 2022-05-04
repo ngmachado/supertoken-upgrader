@@ -32,40 +32,10 @@ describe("Upgrader - Upgrade Operations", function () {
     // whitelist supertoken
     await upgrader.connect(env.accounts[0]).addSuperToken(env.tokens.daix.address);
     // make upgrade to same account
-    await upgrader.connect(env.accounts[5]).upgrade(env.tokens.daix.address, env.accounts[0].address, env.accounts[0].address, ethers.utils.parseEther("1000"));
+    await upgrader.connect(env.accounts[5]).upgrade(env.tokens.daix.address, env.accounts[0].address, ethers.utils.parseEther("1000"));
 
     const finalBal = await env.tokens.daix.balanceOf({
       account: env.accounts[0].address,
-      providerOrSigner: env.accounts[0],
-    });
-    assert.equal(
-        initialBal.toString(),
-        "0",
-        "account starting with supertokens"
-    );
-    assert.equal(
-        finalBal.toString(),
-        ethers.utils.parseEther("1000"),
-        "account should get upgrade result"
-    );
-
-  });
-  it("#2.2 - upgrade balance to different receiver", async () => {
-    const upgrader = await f.deployNewUpgrader(env, [env.accounts[5].address], env.accounts[0].address);
-    // approves user balance to upgrade contract
-    await f.daiApprove(env, env.accounts[0], upgrader.address);
-    const initialBal = await env.tokens.daix.balanceOf({
-      account: env.accounts[2].address,
-      providerOrSigner: env.accounts[0],
-    });
-
-    // whitelist supertoken
-    await upgrader.connect(env.accounts[0]).addSuperToken(env.tokens.daix.address);
-    // make upgrade to same account
-    await upgrader.connect(env.accounts[5]).upgrade(env.tokens.daix.address, env.accounts[0].address, env.accounts[2].address, ethers.utils.parseEther("1000"));
-
-    const finalBal = await env.tokens.daix.balanceOf({
-      account: env.accounts[2].address,
       providerOrSigner: env.accounts[0],
     });
     assert.equal(
@@ -86,7 +56,7 @@ describe("Upgrader - Upgrade Operations", function () {
     await upgrader.connect(env.accounts[0]).addSuperToken(env.tokens.daix.address);
     // make upgrade to same account
     const rightError = await f.expectedRevert(
-        upgrader.connect(env.accounts[5]).upgrade(env.tokens.daix.address, env.accounts[0].address, env.accounts[0].address, ethers.utils.parseEther("1000")),
+        upgrader.connect(env.accounts[5]).upgrade(env.tokens.daix.address, env.accounts[0].address, ethers.utils.parseEther("1000")),
         "ERC20: insufficient allowance"
     );
     assert.ok(rightError);
@@ -99,7 +69,7 @@ describe("Upgrader - Upgrade Operations", function () {
     await upgrader.connect(env.accounts[0]).addSuperToken(env.tokens.daix.address);
     // make upgrade to same account
     const rightError = await f.expectedRevert(
-        upgrader.connect(env.accounts[5]).upgrade(env.tokens.daix.address, env.accounts[0].address, env.accounts[0].address, ethers.utils.parseEther("1000")),
+        upgrader.connect(env.accounts[5]).upgrade(env.tokens.daix.address, env.accounts[0].address, ethers.utils.parseEther("1000")),
         "ERC20: insufficient allowance"
     );
     assert.ok(rightError);
@@ -109,7 +79,7 @@ describe("Upgrader - Upgrade Operations", function () {
     await f.daiApprove(env, env.accounts[0], upgrader.address, "1000");
     // make upgrade to same account
     const rightError = await f.expectedRevert(
-        upgrader.connect(env.accounts[5]).upgrade(env.tokens.daix.address, env.accounts[0].address, env.accounts[0].address, ethers.utils.parseEther("1000")),
+        upgrader.connect(env.accounts[5]).upgrade(env.tokens.daix.address, env.accounts[0].address, ethers.utils.parseEther("1000")),
         "SuperTokenNotSupported()",
     );
     assert.ok(rightError);
@@ -123,7 +93,7 @@ describe("Upgrader - Upgrade Operations", function () {
     await upgrader.connect(env.accounts[0]).removeSuperToken(env.tokens.daix.address);
     // make upgrade to same account
     const rightError = await f.expectedRevert(
-        upgrader.connect(env.accounts[5]).upgrade(env.tokens.daix.address, env.accounts[0].address, env.accounts[0].address, ethers.utils.parseEther("1000")),
+        upgrader.connect(env.accounts[5]).upgrade(env.tokens.daix.address, env.accounts[0].address, ethers.utils.parseEther("1000")),
         "SuperTokenNotSupported()",
     );
     assert.ok(rightError);
@@ -141,7 +111,7 @@ describe("Upgrader - Downgrade Operations", function () {
     // whitelist supertoken
     await upgrader.connect(env.accounts[0]).addSuperToken(env.tokens.daix.address);
     // make upgrade to same account
-    await upgrader.connect(env.accounts[5]).downgrade(env.tokens.daix.address, env.accounts[4].address, env.accounts[4].address, ethers.utils.parseEther("1000"));
+    await upgrader.connect(env.accounts[5]).downgrade(env.tokens.daix.address, env.accounts[4].address, ethers.utils.parseEther("1000"));
     const finalBal = await f.daiBalanceOf(env, env.accounts[4].address)
     const finalBalx = await f.daixBalanceOf(env, env.accounts[4].address)
 
