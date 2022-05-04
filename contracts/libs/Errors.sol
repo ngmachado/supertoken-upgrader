@@ -7,4 +7,6 @@ library Errors {
     error OperationNotAllowed();
     error SuperTokenNotSupported();
     error SuperTokenNotUnderlying();
+    error ERC20TransferRevert();
+    error ERC20TransferFromRevert();
 }
