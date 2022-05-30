@@ -47,6 +47,13 @@ const mint = async (env, account, amount = "1000") => {
   );
 };
 
+const mockMint = async (env, account, amount = "1000") => {
+  await env.tokens.mockToken.mint(
+    account.address,
+    ethers.utils.parseUnits(amount, 18)
+  );
+};
+
 const mintAndUpgrade = async (env, account, amount = "1000") => {
   await env.tokens.dai.mint(
       account.address,
@@ -67,8 +74,19 @@ const daiApprove = async (env, account, spender, amount = "1000") => {
       .approve(spender, ethers.utils.parseEther(amount));
 };
 
+const mockApprove = async (env, account, spender, amount = "1000") => {
+  return await env.tokens.mockToken
+    .connect(account)
+    .approve(spender, ethers.utils.parseEther(amount));
+};
+
 const daixApprove = async (env, account, spender, amount = "1000") => {
   const daixApproveOperation = env.tokens.daix.approve({receiver: spender, amount: ethers.utils.parseEther(amount)});
+  return await daixApproveOperation.exec(account);
+};
+
+const superMockApprove = async (env, account, spender, amount = "1000") => {
+  const daixApproveOperation = env.tokens.mockSuperToken.approve({receiver: spender, amount: ethers.utils.parseEther(amount)});
   return await daixApproveOperation.exec(account);
 };
 
@@ -76,11 +94,21 @@ const daixAllowance = async (env,account, spender) => {
   return await env.tokens.daix.allowance({owner: account.address, spender, providerOrSigner: account});
 }
 
+const superMockAllowance = async (env,account, spender) => {
+  return await env.tokens.mockSuperToken.allowance({owner: account.address, spender, providerOrSigner: account});
+}
+
 const daixBalanceOf = async (env, account) => {
   return await env.tokens.daix.balanceOf({
     account:account,
     providerOrSigner: env.accounts[0],
   });
+}
+
+const superMockBalanceOf = async (env, account) => {
+  return await env.tokens.mockSuperToken.connect(env.accounts[0]).balanceOf(
+    account
+  );
 }
 
 const daiBalanceOf = async (env, account) => {
@@ -91,15 +119,26 @@ const toBN = (a) => {
   return new BN(a);
 }
 
+const scaleDecimalTo18 = (amount, tokenDecimals, targetDecimals) => {
+  if(tokenDecimals > targetDecimals) {
+    return amount / 10 ** (tokenDecimals - targetDecimals);
+  }
+  return amount * 10 ** (targetDecimals - tokenDecimals);
+}
+
 module.exports = {
   expectedRevert,
   mint,
+  mockMint,
   mintAndUpgrade,
   daiApprove,
   daixApprove,
+  mockApprove,
   daixAllowance,
   deployNewUpgrader,
   toBN,
   daiBalanceOf,
   daixBalanceOf,
+  superMockBalanceOf,
+  scaleDecimalTo18,
 };

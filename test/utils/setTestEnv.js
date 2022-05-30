@@ -7,6 +7,10 @@ const GovernanceABI =
   require("@superfluid-finance/ethereum-contracts/build/contracts/TestGovernance.json").abi;
 const ISuperfluid =
   require("@superfluid-finance/ethereum-contracts/build/contracts/ISuperfluid").abi;
+const ISuperTokenFactory =
+  require("@superfluid-finance/ethereum-contracts/build/contracts/ISuperTokenFactory").abi;
+const ISuperToken =
+  require("@superfluid-finance/ethereum-contracts/build/contracts/ISuperToken").abi;
 const { ethers, web3 } = require("hardhat");
 const { Framework } = require("@superfluid-finance/sdk-core");
 
@@ -47,11 +51,39 @@ const deployTestEnv = async () => {
   const daix = await sf.loadSuperToken("fDAIx");
   const daiAddress = daix.underlyingToken.address;
   const dai = new ethers.Contract(daiAddress, TokenABI, accounts[0]);
+
+
+
   const host = new ethers.Contract(
     sf.settings.config.hostAddress,
     ISuperfluid,
     accounts[0]
   );
+
+  const superTokenFactoryAddress = await host.getSuperTokenFactory();
+  const factory = new ethers.Contract(superTokenFactoryAddress, ISuperTokenFactory, accounts[0]);
+  //create mock ERC20 to test decimals
+  const mockERC20Factory = await ethers.getContractFactory("MockERC20", accounts[0]);
+  mock20 = await mockERC20Factory.deploy("mock", "mk", 6);
+  const tx = await factory.connect(accounts[0]).functions["createERC20Wrapper(address,uint8,string,string)"](
+            mock20.address,
+            0,
+            "mockx",
+            "mkx");
+
+  const decodeTx = await tx.wait();
+  const superTokenAddr = decodeTx.events.find((e) => e.event === "SuperTokenCreated").args[0];
+
+  console.log(superTokenAddr);
+
+
+  superMock20 = new ethers.Contract(
+    superTokenAddr,
+    ISuperToken,
+    accounts[0]
+  );
+
+
   const governanceAddress = await host.getGovernance();
   const superfluid = new ethers.Contract(
     governanceAddress,
@@ -71,6 +103,8 @@ const deployTestEnv = async () => {
     tokens: {
       dai: dai,
       daix: daix,
+      mockToken: mock20,
+      mockSuperToken: superMock20
     },
     factories: {
       upgrader: upgraderFactory,

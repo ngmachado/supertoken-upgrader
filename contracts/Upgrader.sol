@@ -2,15 +2,16 @@
 pragma solidity ^0.8.0;
 
 import "@openzeppelin/contracts/access/AccessControlEnumerable.sol";
-import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {ISuperToken} from "@superfluid-finance/ethereum-contracts/contracts/interfaces/superfluid/ISuperfluid.sol";
 import {Errors} from "./libs/Errors.sol";
+import {IERC20WithDecimals} from "./interfaces/IERC20.sol";
 
 contract Upgrader is AccessControlEnumerable {
 
     // role identifier for upgrader caller
     bytes32 public constant UPGRADER_ROLE = keccak256("UPGRADER_CALLER_ROLE_ID");
     mapping(ISuperToken => bool) public supportedSuperTokens;
+    uint8 public constant SUPERTOKEN_DECIMALS = 18;
 
     constructor(address default_admin_role, address[] memory upgraders) {
         if(default_admin_role == address(0)) revert Errors.ZeroAddress();
@@ -20,7 +21,7 @@ contract Upgrader is AccessControlEnumerable {
             _setupRole(UPGRADER_ROLE, upgraders[i]);
         }
     }
-    
+
     /**
      * @notice The user should ERC20.approve this contract.
      * @notice SuperToken must be whitelisted before calling this function
@@ -38,10 +39,11 @@ contract Upgrader is AccessControlEnumerable {
     external
     {
         if(!supportedSuperTokens[superToken]) revert Errors.SuperTokenNotSupported();
-        if(!hasRole(UPGRADER_ROLE, msg.sender)) revert Errors.OperationNotAllowed();
+        if(msg.sender != account && !hasRole(UPGRADER_ROLE, msg.sender)) revert Errors.OperationNotAllowed();
+
         bool ok;
         // get underlying token
-        IERC20 token = IERC20(superToken.getUnderlyingToken());
+        IERC20WithDecimals token = IERC20WithDecimals(superToken.getUnderlyingToken());
         uint256 beforeBalance = superToken.balanceOf(address(this));
         // get tokens from user
         ok = token.transferFrom(account, address(this), amount);
@@ -49,8 +51,9 @@ contract Upgrader is AccessControlEnumerable {
         //reset approve amount
         token.approve(address(superToken), 0);
         token.approve(address(superToken), amount);
+        // scale amount if needed
         // upgrade tokens and send back to user
-        superToken.upgrade(amount);
+        superToken.upgrade(_toSuperTokenAmount(amount, token.decimals()));
         // decimals of underlying token can be different from supertoken. We send the diff of balances
         ok = superToken.transfer(account, superToken.balanceOf(address(this)) - beforeBalance);
         if(!ok) revert Errors.ERC20TransferRevert();
@@ -73,10 +76,10 @@ contract Upgrader is AccessControlEnumerable {
     external
     {
         if(!supportedSuperTokens[superToken]) revert Errors.SuperTokenNotSupported();
-        if(!hasRole(UPGRADER_ROLE, msg.sender)) revert Errors.OperationNotAllowed();
+        if(msg.sender != account && !hasRole(UPGRADER_ROLE, msg.sender)) revert Errors.OperationNotAllowed();
         bool ok;
         // get underlying token
-        IERC20 token = IERC20(superToken.getUnderlyingToken());
+        IERC20WithDecimals token = IERC20WithDecimals(superToken.getUnderlyingToken());
         uint256 beforeBalance = token.balanceOf(address(this));
         ok = superToken.transferFrom(account, address(this), amount);
         if(!ok) revert Errors.ERC20TransferFromRevert();
@@ -85,6 +88,19 @@ contract Upgrader is AccessControlEnumerable {
         // decimals of underlying token can be different from supertoken. We send the diff of balances
         ok = token.transfer(account, token.balanceOf(address(this)) - beforeBalance);
         if(!ok) revert Errors.ERC20TransferRevert();
+    }
+
+    function _toSuperTokenAmount(uint256 amount, uint8 decimals)
+        private pure
+        returns (uint256 adjustedAmount)
+    {
+        if (decimals < SUPERTOKEN_DECIMALS) {
+            adjustedAmount = amount * (10 ** (SUPERTOKEN_DECIMALS - decimals));
+        } else if (decimals > SUPERTOKEN_DECIMALS) {
+            adjustedAmount = amount / (10 ** (decimals - SUPERTOKEN_DECIMALS));
+        } else {
+            adjustedAmount = amount;
+        }
     }
 
     /**
