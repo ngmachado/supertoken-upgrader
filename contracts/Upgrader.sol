@@ -13,83 +13,87 @@ contract Upgrader is AccessControlEnumerable {
     mapping(ISuperToken => bool) public supportedSuperTokens;
     uint8 public constant SUPERTOKEN_DECIMALS = 18;
 
-    constructor(address default_admin_role, address[] memory upgraders) {
-        if(default_admin_role == address(0)) revert Errors.ZeroAddress();
-        _setupRole(DEFAULT_ADMIN_ROLE, default_admin_role);
+    constructor(address defaultAdmin, address[] memory upgraders) {
+        if (defaultAdmin == address(0)) revert Errors.ZeroAddress();
+        _setupRole(DEFAULT_ADMIN_ROLE, defaultAdmin);
         for (uint256 i = 0; i < upgraders.length; i++) {
-            if(upgraders[i] == address(0)) revert Errors.ZeroAddress();
+            if (upgraders[i] == address(0)) revert Errors.ZeroAddress();
             _setupRole(UPGRADER_ROLE, upgraders[i]);
         }
     }
 
     /**
-     * @notice The user should ERC20.approve this contract.
-     * @notice SuperToken must be whitelisted before calling this function
-     * @notice User can upgrade self balance
-     * @dev Execute upgrade function in the name of the user.
-     * @param superToken Super Token to upgrade
-     * @param account User address that previous approved this contract.
-     * @param amount Amount value to be upgraded.
+     * @dev Upgrade ERC20 tokens to Super Tokens on behalf of an account.
+     * @param superToken Super Token to upgrade to - must be included in `supportedSuperTokens`
+     * @param account Account for which to upgrade
+     * @param amount Amount of ERC20 tokens to be upgraded
+     * @notice For the call to succeed, this contract needs to have sufficient allowance on the underlying ERC20 tokens.
+     * @notice If `msg.sender` equals `account`, it doesn't need to have the upgrader role.
      */
     function upgrade(
         ISuperToken superToken,
         address account,
         uint256 amount
     )
-    external
+        external
     {
-        if(!supportedSuperTokens[superToken]) revert Errors.SuperTokenNotSupported();
-        if(msg.sender != account && !hasRole(UPGRADER_ROLE, msg.sender)) revert Errors.OperationNotAllowed();
+        if (!supportedSuperTokens[superToken]) revert Errors.SuperTokenNotSupported();
+        if (msg.sender != account && !hasRole(UPGRADER_ROLE, msg.sender)) {
+           revert Errors.OperationNotAllowed();
+        }
 
-        bool ok;
-        // get underlying token
-        IERC20WithDecimals token = IERC20WithDecimals(superToken.getUnderlyingToken());
+        // We first transfer ERC20 tokens from the given account to this contract ...
+        IERC20WithDecimals erc20Token = IERC20WithDecimals(superToken.getUnderlyingToken());
         uint256 beforeBalance = superToken.balanceOf(address(this));
-        // get tokens from user
-        ok = token.transferFrom(account, address(this), amount);
-        if(!ok) revert Errors.ERC20TransferFromRevert();
-        //reset approve amount
-        token.approve(address(superToken), 0);
-        token.approve(address(superToken), amount);
-        // scale amount if needed
-        // upgrade tokens and send back to user
-        superToken.upgrade(_toSuperTokenAmount(amount, token.decimals()));
-        // decimals of underlying token can be different from supertoken. We send the diff of balances
-        ok = superToken.transfer(account, superToken.balanceOf(address(this)) - beforeBalance);
-        if(!ok) revert Errors.ERC20TransferRevert();
+        if (!erc20Token.transferFrom(account, address(this), amount)) {
+            revert Errors.ERC20TransferFromRevert();
+        }
+        // ... then upgrade them to Super Tokens, scaling the amount in case decimals differ ...
+        erc20Token.approve(address(superToken), amount);
+        superToken.upgrade(_toSuperTokenAmount(amount, erc20Token.decimals()));
+        
+        // ... then transfer the newly minted Super Tokens to the account
+        if (!superToken.transfer(account, superToken.balanceOf(address(this)) - beforeBalance)) {
+            revert Errors.ERC20TransferRevert();
+        }
     }
 
     /**
-     * @notice The user should SuperToken.approve this contract.
-     * @notice SuperToken must be whitelisted before calling this function
-     * @notice User can downgrade self balance
-     * @dev Execute upgrade function in the name of the user.
-     * @param superToken Super Token to upgrade
-     * @param account User address that previous approved this contract.
-     * @param amount Amount value to be downgraded (in SuperToken decimals).
+     * @dev Downgrade Super Tokens to ERC20 tokens on behalf of an account.
+     * @param superToken Super Token to downgrade - must be included in `supportedSuperTokens`
+     * @param account Account for which to downgrade
+     * @param amount Amount of Super Tokens to be downgraded
+     * @notice For the call to succeed, this contract needs to have sufficient allowance on the Super Token.
+     * @notice If `msg.sender` equals `account`, it doesn't need to have the upgrader role.
      */
     function downgrade(
         ISuperToken superToken,
         address account,
         uint256 amount
     )
-    external
+        external
     {
-        if(!supportedSuperTokens[superToken]) revert Errors.SuperTokenNotSupported();
-        if(msg.sender != account && !hasRole(UPGRADER_ROLE, msg.sender)) revert Errors.OperationNotAllowed();
-        bool ok;
-        // get underlying token
-        IERC20WithDecimals token = IERC20WithDecimals(superToken.getUnderlyingToken());
-        uint256 beforeBalance = token.balanceOf(address(this));
-        ok = superToken.transferFrom(account, address(this), amount);
-        if(!ok) revert Errors.ERC20TransferFromRevert();
-        // downgrade tokens and send back to user
+        if (!supportedSuperTokens[superToken]) revert Errors.SuperTokenNotSupported();
+        if (msg.sender != account && !hasRole(UPGRADER_ROLE, msg.sender)) {
+            revert Errors.OperationNotAllowed();
+        }
+
+        // We first transfer Super Tokens from the given account to this contract ...
+        if (!superToken.transferFrom(account, address(this), amount)) {
+            revert Errors.ERC20TransferFromRevert();
+        }
+        // ... then downgrade them to ERC20 tokens ...
+        IERC20WithDecimals erc20Token = IERC20WithDecimals(superToken.getUnderlyingToken());
+        uint256 beforeBalance = erc20Token.balanceOf(address(this));
         superToken.downgrade(amount);
-        // decimals of underlying token can be different from supertoken. We send the diff of balances
-        ok = token.transfer(account, token.balanceOf(address(this)) - beforeBalance);
-        if(!ok) revert Errors.ERC20TransferRevert();
+
+        // then transfer the unwrapped ERC20 tokens to the account, scaling the amount in case decimals differ
+        if (!erc20Token.transfer(account, erc20Token.balanceOf(address(this)) - beforeBalance)) {
+            revert Errors.ERC20TransferRevert();
+        }
     }
 
+    // converts erc20 amount based on the given er20 decimals to Super Token amount
     function _toSuperTokenAmount(uint256 amount, uint8 decimals)
         private pure
         returns (uint256 adjustedAmount)
@@ -103,12 +107,14 @@ contract Upgrader is AccessControlEnumerable {
         }
     }
 
-    /**
-     * MANAGE SUPERTOKENS
-     */
+    /******************
+     * ADMIN INTERFACE
+     ******************/
 
     function addSuperToken(ISuperToken superToken) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        if(superToken.getUnderlyingToken() == address(0)) revert Errors.SuperTokenNotUnderlying();
+        if (superToken.getUnderlyingToken() == address(0)) {
+            revert Errors.SuperTokenNotUnderlying();
+        }
         supportedSuperTokens[superToken] = true;
     }
 
@@ -117,15 +123,11 @@ contract Upgrader is AccessControlEnumerable {
     }
 
     /**
-     * ACCESS CONTROL
-     */
-
-    /**
      * @dev Allows admin to add address to upgrader role
      * @param newUpgradeCaller address
      */
     function addUpgrader(address newUpgradeCaller) external {
-        if(newUpgradeCaller == address(0)) revert Errors.OperationNotAllowed();
+        if (newUpgradeCaller == address(0)) revert Errors.OperationNotAllowed();
         grantRole(UPGRADER_ROLE, newUpgradeCaller);
     }
 
