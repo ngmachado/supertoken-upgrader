@@ -37,12 +37,55 @@ module.exports = {
       accounts:
           process.env.PRIVATE_KEY !== undefined ? [process.env.PRIVATE_KEY] : [],
     },
+    ropsten: {
+      url: process.env.ROPSTEN_URL || "",
+      accounts:
+          process.env.PRIVATE_KEY !== undefined ? [process.env.PRIVATE_KEY] : [],
+    },
+    goerli: {
+      url: process.env.GOERLI_URL || "",
+      accounts:
+        process.env.PRIVATE_KEY !== undefined ? [process.env.PRIVATE_KEY] : [],
+    },
+    polygon: {
+      url: process.env.POLYGON_URL || "",
+      accounts:
+        process.env.PRIVATE_KEY !== undefined ? [process.env.PRIVATE_KEY] : [],
+    },
+    arbitrum : {
+      url: process.env.ARBITRUM_URL || "",
+      accounts:
+        process.env.PRIVATE_KEY !== undefined ? [process.env.PRIVATE_KEY] : [],
+    },
+    optimism : {
+      url: process.env.OPTIMISM_URL || "",
+      accounts:
+        process.env.PRIVATE_KEY !== undefined ? [process.env.PRIVATE_KEY] : [],
+    },
+    avalanche : {
+      url: process.env.AVALANCHE_URL || "",
+      accounts:
+        process.env.PRIVATE_KEY !== undefined ? [process.env.PRIVATE_KEY] : [],
+    },
+    gnosis : {
+      url: process.env.GNOSIS_URL || "",
+      accounts:
+        process.env.PRIVATE_KEY !== undefined ? [process.env.PRIVATE_KEY] : [],
+    },
+
   },
   namedAccounts: {
     deployer: {
       default: 0,
+      3: "0xa67E5e25DBEa60E843dDe146f4518f69e23bbe78",
       4: "0xa67E5e25DBEa60E843dDe146f4518f69e23bbe78",
+      5: "0xa67E5e25DBEa60E843dDe146f4518f69e23bbe78",
       42: "0xa67E5e25DBEa60E843dDe146f4518f69e23bbe78",
+      42160: "0xa67E5e25DBEa60E843dDe146f4518f69e23bbe78",
+      43114: "0xa67E5e25DBEa60E843dDe146f4518f69e23bbe78",
+      100: "0xa67E5e25DBEa60E843dDe146f4518f69e23bbe78",
+      10: "0xa67E5e25DBEa60E843dDe146f4518f69e23bbe78",
+      137: "0xa67E5e25DBEa60E843dDe146f4518f69e23bbe78",
     },
   },
   gasReporter: {

@@ -36,6 +36,11 @@ const deployTestEnv = async () => {
     from: accounts[0].address,
   });
 
+  await deploySuperToken(errorHandler, [":", "0x0000000000000000000000000000000000000000"], {
+    web3,
+    from: accounts[0].address,
+  });
+
   const sf = await Framework.create({
     networkName: "custom",
     provider,
@@ -48,7 +53,9 @@ const deployTestEnv = async () => {
     signer: accounts[0],
     provider: provider,
   });
+  const ethx = await sf.loadSuperToken("ETHx");
   const daix = await sf.loadSuperToken("fDAIx");
+
   const daiAddress = daix.underlyingToken.address;
   const dai = new ethers.Contract(daiAddress, TokenABI, accounts[0]);
 
@@ -76,7 +83,6 @@ const deployTestEnv = async () => {
 
   console.log(superTokenAddr);
 
-
   superMock20 = new ethers.Contract(
     superTokenAddr,
     ISuperToken,
@@ -97,10 +103,12 @@ const deployTestEnv = async () => {
   return {
     defaultDeployer: signer,
     accounts: accounts,
+    provider: provider,
     sf: sf,
     superfluid: superfluid,
     host: host,
     tokens: {
+      ethx: ethx,
       dai: dai,
       daix: daix,
       mockToken: mock20,

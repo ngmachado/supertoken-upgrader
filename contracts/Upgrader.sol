@@ -3,6 +3,7 @@ pragma solidity ^0.8.0;
 
 import "@openzeppelin/contracts/access/AccessControlEnumerable.sol";
 import {ISuperToken} from "@superfluid-finance/ethereum-contracts/contracts/interfaces/superfluid/ISuperfluid.sol";
+import {ISETH} from "@superfluid-finance/ethereum-contracts/contracts/interfaces/tokens/ISETH.sol";
 import {Errors} from "./libs/Errors.sol";
 import {IERC20WithDecimals} from "./interfaces/IERC20.sol";
 
@@ -10,12 +11,14 @@ contract Upgrader is AccessControlEnumerable {
 
     // role identifier for upgrader caller
     bytes32 public constant UPGRADER_ROLE = keccak256("UPGRADER_CALLER_ROLE_ID");
-    mapping(ISuperToken => bool) public supportedSuperTokens;
     uint8 public constant SUPERTOKEN_DECIMALS = 18;
+    ISETH public immutable nativeSuperToken;
 
-    constructor(address defaultAdmin, address[] memory upgraders) {
+    constructor(address defaultAdmin, address ntSuperToken, address[] memory upgraders) {
         if (defaultAdmin == address(0)) revert Errors.ZeroAddress();
+        if (ntSuperToken == address(0)) revert Errors.ZeroAddress();
         _setupRole(DEFAULT_ADMIN_ROLE, defaultAdmin);
+        nativeSuperToken = ISETH(ntSuperToken);
         for (uint256 i = 0; i < upgraders.length; i++) {
             if (upgraders[i] == address(0)) revert Errors.ZeroAddress();
             _setupRole(UPGRADER_ROLE, upgraders[i]);
@@ -24,7 +27,7 @@ contract Upgrader is AccessControlEnumerable {
 
     /**
      * @dev Upgrade ERC20 tokens to Super Tokens on behalf of an account.
-     * @param superToken Super Token to upgrade to - must be included in `supportedSuperTokens`
+     * @param superToken Super Token to upgrade to
      * @param account Account for which to upgrade
      * @param amount Amount of ERC20 tokens to be upgraded
      * @notice For the call to succeed, this contract needs to have sufficient allowance on the underlying ERC20 tokens.
@@ -37,13 +40,15 @@ contract Upgrader is AccessControlEnumerable {
     )
         external
     {
-        if (!supportedSuperTokens[superToken]) revert Errors.SuperTokenNotSupported();
         if (msg.sender != account && !hasRole(UPGRADER_ROLE, msg.sender)) {
            revert Errors.OperationNotAllowed();
         }
 
         // We first transfer ERC20 tokens from the given account to this contract ...
         IERC20WithDecimals erc20Token = IERC20WithDecimals(superToken.getUnderlyingToken());
+        if (address(erc20Token) == address(0)) {
+            revert Errors.SuperTokenNotUnderlying();
+        }
         uint256 beforeBalance = superToken.balanceOf(address(this));
         if (!erc20Token.transferFrom(account, address(this), amount)) {
             revert Errors.ERC20TransferFromRevert();
@@ -73,7 +78,6 @@ contract Upgrader is AccessControlEnumerable {
     )
         external
     {
-        if (!supportedSuperTokens[superToken]) revert Errors.SuperTokenNotSupported();
         if (msg.sender != account && !hasRole(UPGRADER_ROLE, msg.sender)) {
             revert Errors.OperationNotAllowed();
         }
@@ -93,7 +97,51 @@ contract Upgrader is AccessControlEnumerable {
         }
     }
 
-    // converts erc20 amount based on the given er20 decimals to Super Token amount
+    /**
+     * @dev Upgrade Native Coin to Super Tokens.
+     * @param superToken Super Token to upgrade to
+     * @param account Account for which to upgrade
+     * @param amount Amount of ERC20 tokens to be upgraded
+     */
+    function upgradeByETH() external payable {
+        _upgradeByETH();
+    }
+
+    /**
+     * @dev Downgrade Super Tokens to Native Coin.
+     * @param superToken Super Token to downgrade - must be included in `supportedSuperTokens`
+     * @param wad Amount of Super Tokens to be downgraded
+     * @notice For the call to succeed, this contract needs to have sufficient allowance on the Super Token.
+     */
+    function downgradeToETH(uint256 wad) external {
+        uint256 beforeBalance = address(this).balance;
+
+        // We first transfer Super Tokens from the given account to this contract ...
+        if (!nativeSuperToken.transferFrom(msg.sender, address(this), wad)) {
+            revert Errors.ERC20TransferFromRevert();
+        }
+        nativeSuperToken.downgradeToETH(wad);
+        payable(msg.sender).transfer(address(this).balance - beforeBalance);
+    }
+
+    // fallback function which mints Super Tokens for received ETH
+    receive() external payable {
+        if(msg.sender != address(nativeSuperToken)) {
+            _upgradeByETH();
+        }
+    }
+
+    // upgrade coin to Native Super Token
+    function _upgradeByETH() internal {
+        uint256 beforeBalance = nativeSuperToken.balanceOf(address(this));
+        nativeSuperToken.upgradeByETH{value: msg.value }();
+        // ... then transfer the newly minted Super Tokens to the account
+        if (!nativeSuperToken.transfer(msg.sender, nativeSuperToken.balanceOf(address(this)) - beforeBalance)) {
+            revert Errors.ERC20TransferRevert();
+        }
+    }
+
+    // converts erc20 amount based o2n the given er20 decimals to Super Token amount
     function _toSuperTokenAmount(uint256 amount, uint8 decimals)
         private pure
         returns (uint256 adjustedAmount)
@@ -110,17 +158,6 @@ contract Upgrader is AccessControlEnumerable {
     /******************
      * ADMIN INTERFACE
      ******************/
-
-    function addSuperToken(ISuperToken superToken) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        if (superToken.getUnderlyingToken() == address(0)) {
-            revert Errors.SuperTokenNotUnderlying();
-        }
-        supportedSuperTokens[superToken] = true;
-    }
-
-    function removeSuperToken(ISuperToken superToken) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        delete supportedSuperTokens[superToken];
-    }
 
     /**
      * @dev Allows admin to add address to upgrader role

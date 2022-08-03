@@ -24,20 +24,7 @@ const deployNewUpgrader = async (
   upgraders,
   owner = env.defaultDeployer.address,
 ) => {
-  return await env.factories.upgrader.deploy(owner, upgraders);
-};
-
-const deployNewUpgraderWithSupportTokens = async (
-    env,
-    upgraders,
-    superTokens,
-    owner = env.defaultDeployer,
-) => {
-  const contract = await env.factories.upgrader.deploy(owner.address, upgraders);
-  for(let supertoken in superTokens) {
-    console.log("adding supertoken: ", supertoken);
-
-  }
+  return await env.factories.upgrader.deploy(owner, env.tokens.ethx.address, upgraders);
 };
 
 const mint = async (env, account, amount = "1000") => {
@@ -85,6 +72,11 @@ const daixApprove = async (env, account, spender, amount = "1000") => {
   return await daixApproveOperation.exec(account);
 };
 
+const ethxApprove = async (env, account, spender, amount) => {
+  const ethxApproveOperation = env.tokens.ethx.approve({receiver: spender, amount: amount});
+  return await ethxApproveOperation.exec(account);
+};
+
 const superMockApprove = async (env, account, spender, amount = "1000") => {
   const daixApproveOperation = env.tokens.mockSuperToken.approve({receiver: spender, amount: ethers.utils.parseEther(amount)});
   return await daixApproveOperation.exec(account);
@@ -92,6 +84,10 @@ const superMockApprove = async (env, account, spender, amount = "1000") => {
 
 const daixAllowance = async (env,account, spender) => {
   return await env.tokens.daix.allowance({owner: account.address, spender, providerOrSigner: account});
+}
+
+const ethxAllowance = async (env,account, spender) => {
+  return await env.tokens.ethx.allowance({owner: account.address, spender, providerOrSigner: account});
 }
 
 const superMockAllowance = async (env,account, spender) => {
@@ -126,6 +122,10 @@ const scaleDecimalTo18 = (amount, tokenDecimals, targetDecimals) => {
   return amount * 10 ** (targetDecimals - tokenDecimals);
 }
 
+const getBalance = async (env, account) => {
+  return await env.provider.getBalance(account);
+}
+
 module.exports = {
   expectedRevert,
   mint,
@@ -133,6 +133,8 @@ module.exports = {
   mintAndUpgrade,
   daiApprove,
   daixApprove,
+  ethxApprove,
+  ethxAllowance,
   mockApprove,
   daixAllowance,
   deployNewUpgrader,
@@ -141,4 +143,5 @@ module.exports = {
   daixBalanceOf,
   superMockBalanceOf,
   scaleDecimalTo18,
+  getBalance
 };
