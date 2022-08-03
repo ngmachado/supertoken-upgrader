@@ -14,6 +14,14 @@ contract Upgrader is AccessControlEnumerable {
     uint8 public constant SUPERTOKEN_DECIMALS = 18;
     ISETH public immutable nativeSuperToken;
 
+
+    modifier onlyIfNativeSupported() {
+        if(address(nativeSuperToken) == address(0)) {
+            revert Errors.NativeSuperTokenNotSupported();
+        }
+        _;
+    }
+
     constructor(address defaultAdmin, address ntSuperToken, address[] memory upgraders) {
         if (defaultAdmin == address(0)) revert Errors.ZeroAddress();
         if (ntSuperToken == address(0)) revert Errors.ZeroAddress();
@@ -99,21 +107,17 @@ contract Upgrader is AccessControlEnumerable {
 
     /**
      * @dev Upgrade Native Coin to Super Tokens.
-     * @param superToken Super Token to upgrade to
-     * @param account Account for which to upgrade
-     * @param amount Amount of ERC20 tokens to be upgraded
      */
-    function upgradeByETH() external payable {
+    function upgradeByETH() external payable onlyIfNativeSupported {
         _upgradeByETH();
     }
 
     /**
      * @dev Downgrade Super Tokens to Native Coin.
-     * @param superToken Super Token to downgrade - must be included in `supportedSuperTokens`
      * @param wad Amount of Super Tokens to be downgraded
      * @notice For the call to succeed, this contract needs to have sufficient allowance on the Super Token.
      */
-    function downgradeToETH(uint256 wad) external {
+    function downgradeToETH(uint256 wad) external onlyIfNativeSupported {
         uint256 beforeBalance = address(this).balance;
 
         // We first transfer Super Tokens from the given account to this contract ...
@@ -125,7 +129,7 @@ contract Upgrader is AccessControlEnumerable {
     }
 
     // fallback function which mints Super Tokens for received ETH
-    receive() external payable {
+    receive() external payable onlyIfNativeSupported {
         if(msg.sender != address(nativeSuperToken)) {
             _upgradeByETH();
         }
