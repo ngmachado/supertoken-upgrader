@@ -222,7 +222,7 @@ describe("Upgrader - Downgrade Operations", function () {
     );
   });
 
-  it("#3.1 - should upgrade native coin", async () => {
+  it("#3.1 - should upgrade native coin (self)", async () => {
     const wad = ethers.utils.parseEther("1.0");
     const upgrader = await f.deployNewUpgrader(env, [env.accounts[5].address], env.accounts[0].address);
     const initialBal = await env.tokens.ethx.balanceOf({
@@ -236,7 +236,7 @@ describe("Upgrader - Downgrade Operations", function () {
       "account should be empty before upgrade"
     );
     // make upgrade to same account
-    await upgrader.connect(env.accounts[0]).upgradeByETH({value: wad});
+    await upgrader.connect(env.accounts[0]).upgradeByETH(env.accounts[0].address, {value: wad});
     assert.equal(
       await env.tokens.ethx.balanceOf({
         account: env.accounts[0].address,
@@ -246,18 +246,67 @@ describe("Upgrader - Downgrade Operations", function () {
       "wrong upgrade amount"
     );
   });
-  it("#3.2 - should downgrade native coin", async () => {
+  it("#3.2 - should downgrade native coin (self)", async () => {
     const wad = ethers.utils.parseEther("1.0");
     const upgrader = await f.deployNewUpgrader(env, [env.accounts[5].address], env.accounts[0].address);
     await f.ethxApprove(env, env.accounts[0], upgrader.address, wad);
     // make upgrade to same account
-    await upgrader.connect(env.accounts[0]).upgradeByETH({value: wad});
+    await upgrader.connect(env.accounts[0]).upgradeByETH(env.accounts[0].address,{value: wad});
     // make upgrade to same account
     const initialBal = await env.provider.eth.getBalance(env.accounts[0].address)
-    await upgrader.connect(env.accounts[0]).downgradeToETH(wad);
+    await upgrader.connect(env.accounts[0]).downgradeToETH(env.accounts[0].address, wad);
     const finalBal = await env.provider.eth.getBalance(env.accounts[0].address)
     console.log(initialBal)
     console.log(finalBal)
     assert.isAbove(Number(finalBal), Number(initialBal), "account should have more balance");
+  });
+  it("#3.3 - should upgrade native coin (receiver)", async () => {
+    const wad = ethers.utils.parseEther("1.0");
+    const upgrader = await f.deployNewUpgrader(env, [env.accounts[5].address], env.accounts[0].address);
+    const receiverBalance = await env.tokens.ethx.balanceOf({
+      account: env.accounts[5].address,
+      providerOrSigner: env.accounts[0],
+    });
+
+    assert.equal(
+      receiverBalance.toString(),
+      "0",
+      "receiver balance should be empty before upgrade"
+    );
+    // make upgrade to same account
+    await upgrader.connect(env.accounts[0]).upgradeByETH(env.accounts[5].address, {value: wad});
+    assert.equal(
+      await env.tokens.ethx.balanceOf({
+        account: env.accounts[5].address,
+        providerOrSigner: env.accounts[0],
+      }),
+      wad,
+      "wrong upgrade amount"
+    );
+  });
+  it("#3.4 - should downgrade native coin (receiver)", async () => {
+    const wad = ethers.utils.parseEther("1.0");
+    const upgrader = await f.deployNewUpgrader(env, [env.accounts[5].address], env.accounts[0].address);
+    await f.ethxApprove(env, env.accounts[0], upgrader.address, wad);
+    // make upgrade to same account
+    await upgrader.connect(env.accounts[0]).upgradeByETH(env.accounts[0].address,{value: wad});
+    // make upgrade to same account
+    const senderBalance = await env.provider.eth.getBalance(env.accounts[0].address)
+    const receiverBalance = await env.provider.eth.getBalance(env.accounts[5].address)
+    await upgrader.connect(env.accounts[0]).downgradeToETH(env.accounts[5].address, wad);
+    const senderFinalBalance = await env.provider.eth.getBalance(env.accounts[0].address)
+    const receiverFinalBalance = await env.provider.eth.getBalance(env.accounts[5].address)
+    assert.isAbove(Number(receiverFinalBalance), Number(receiverBalance), "account should have more balance");
+    assert.isBelow(Number(senderFinalBalance), Number(senderBalance), "account should have less balance");
+  });
+  it("#3.5 - should revert if native token is not set", async () => {
+    const wad = ethers.utils.parseEther("1.0");
+    const upgrader = await f.deployNewUpgraderWithoutNative(env, [env.accounts[5].address], env.accounts[0].address);
+    await f.ethxApprove(env, env.accounts[0], upgrader.address, wad);
+    const rightError = await f.expectedRevert(
+      upgrader.connect(env.accounts[0]).upgradeByETH(env.accounts[0].address, {value: wad}),
+      "NativeSuperTokenNotSupported"
+    );
+    assert.ok(rightError);
   });
 });

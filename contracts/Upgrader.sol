@@ -24,7 +24,6 @@ contract Upgrader is AccessControlEnumerable {
 
     constructor(address defaultAdmin, address ntSuperToken, address[] memory upgraders) {
         if (defaultAdmin == address(0)) revert Errors.ZeroAddress();
-        if (ntSuperToken == address(0)) revert Errors.ZeroAddress();
         _setupRole(DEFAULT_ADMIN_ROLE, defaultAdmin);
         nativeSuperToken = ISETH(ntSuperToken);
         for (uint256 i = 0; i < upgraders.length; i++) {
@@ -107,17 +106,19 @@ contract Upgrader is AccessControlEnumerable {
 
     /**
      * @dev Upgrade Native Coin to Super Tokens.
+     * @param receiver Account that will get coin
      */
-    function upgradeByETH() external payable onlyIfNativeSupported {
-        _upgradeByETH();
+    function upgradeByETH(address receiver) external payable onlyIfNativeSupported {
+        _upgradeByETH(receiver);
     }
 
     /**
      * @dev Downgrade Super Tokens to Native Coin.
+     * @param receiver Account that will get coin
      * @param wad Amount of Super Tokens to be downgraded
      * @notice For the call to succeed, this contract needs to have sufficient allowance on the Super Token.
      */
-    function downgradeToETH(uint256 wad) external onlyIfNativeSupported {
+    function downgradeToETH(address receiver, uint256 wad) external onlyIfNativeSupported {
         uint256 beforeBalance = address(this).balance;
 
         // We first transfer Super Tokens from the given account to this contract ...
@@ -125,22 +126,22 @@ contract Upgrader is AccessControlEnumerable {
             revert Errors.ERC20TransferFromRevert();
         }
         nativeSuperToken.downgradeToETH(wad);
-        payable(msg.sender).transfer(address(this).balance - beforeBalance);
+        payable(receiver).transfer(address(this).balance - beforeBalance);
     }
 
     // fallback function which mints Super Tokens for received ETH
     receive() external payable onlyIfNativeSupported {
         if(msg.sender != address(nativeSuperToken)) {
-            _upgradeByETH();
+            _upgradeByETH(msg.sender);
         }
     }
 
     // upgrade coin to Native Super Token
-    function _upgradeByETH() internal {
+    function _upgradeByETH(address receiver) internal {
         uint256 beforeBalance = nativeSuperToken.balanceOf(address(this));
         nativeSuperToken.upgradeByETH{value: msg.value }();
         // ... then transfer the newly minted Super Tokens to the account
-        if (!nativeSuperToken.transfer(msg.sender, nativeSuperToken.balanceOf(address(this)) - beforeBalance)) {
+        if (!nativeSuperToken.transfer(receiver, nativeSuperToken.balanceOf(address(this)) - beforeBalance)) {
             revert Errors.ERC20TransferRevert();
         }
     }

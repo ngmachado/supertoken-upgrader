@@ -27,6 +27,14 @@ const deployNewUpgrader = async (
   return await env.factories.upgrader.deploy(owner, env.tokens.ethx.address, upgraders);
 };
 
+const deployNewUpgraderWithoutNative = async (
+  env,
+  upgraders,
+  owner = env.defaultDeployer.address,
+) => {
+  return await env.factories.upgrader.deploy(owner, "0x0000000000000000000000000000000000000000", upgraders);
+};
+
 const mint = async (env, account, amount = "1000") => {
   await env.tokens.dai.mint(
     account.address,
@@ -138,6 +146,7 @@ module.exports = {
   mockApprove,
   daixAllowance,
   deployNewUpgrader,
+  deployNewUpgraderWithoutNative,
   toBN,
   daiBalanceOf,
   daixBalanceOf,
